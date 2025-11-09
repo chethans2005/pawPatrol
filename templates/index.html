@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pet Adoption & Inventory System</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <h1>🐾 Pet Adoption Center</h1>
+            </div>
+            <div class="nav-menu">
+                <a href="#pets" class="nav-link">Browse Pets</a>
+                <a href="#shop" class="nav-link">Shop</a>
+                <a href="#donate" class="nav-link">Donate Pet</a>
+                <div id="user-menu" style="display: none;">
+                    <span id="username-display"></span>
+                    <span id="wallet-display"></span>
+                    <button id="logout-btn" class="btn btn-secondary">Logout</button>
+                </div>
+                <div id="auth-menu">
+                    <button id="login-btn" class="btn btn-primary">Login</button>
+                    <button id="register-btn" class="btn btn-primary">Register</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <!-- Hero Section -->
+        <section id="hero" class="hero">
+            <h2>Find Your Perfect Companion</h2>
+            <p>Adopt a pet, save a life. Browse our available pets and give them a loving home.</p>
+            <button class="btn btn-large" onclick="showSection('pets')">Browse Pets</button>
+        </section>
+
+        <!-- Pets Section -->
+        <section id="pets" class="section">
+            <h2>Available Pets</h2>
+            <div class="filters">
+                <select id="shelter-filter" class="filter-select">
+                    <option value="">All Shelters</option>
+                </select>
+                <button class="btn" onclick="loadPets()">Filter</button>
+            </div>
+            <div id="pets-grid" class="grid"></div>
+        </section>
+
+        <!-- Shop Section -->
+        <section id="shop" class="section" style="display: none;">
+            <h2>Pet Supplies Shop</h2>
+            <div id="shop-grid" class="grid"></div>
+        </section>
+
+        <!-- Donate Section -->
+        <section id="donate" class="section" style="display: none;">
+            <h2>Donate a Pet</h2>
+            <div class="form-container">
+                <form id="donor-form">
+                    <div class="form-group">
+                        <label>Pet Name</label>
+                        <input type="text" id="donate-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Species</label>
+                        <input type="text" id="donate-species" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Breed</label>
+                        <input type="text" id="donate-breed">
+                    </div>
+                    <div class="form-group">
+                        <label>Age</label>
+                        <input type="number" id="donate-age" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Health Status</label>
+                        <textarea id="donate-health"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="donate-description"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Submit Donation</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- My Applications Section -->
+        <section id="my-applications" class="section" style="display: none;">
+            <h2>My Adoption Applications</h2>
+            <div id="applications-list"></div>
+        </section>
+
+        <!-- My Orders Section -->
+        <section id="my-orders" class="section" style="display: none;">
+            <h2>My Orders</h2>
+            <div id="orders-list"></div>
+        </section>
+    </main>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('login-modal')">&times;</span>
+            <h2>Login</h2>
+            <form id="login-form">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="login-username" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div id="register-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('register-modal')">&times;</span>
+            <h2>Register</h2>
+            <form id="register-form">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="reg-username" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="reg-password" required>
+                </div>
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="reg-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Contact</label>
+                    <input type="text" id="reg-contact" required>
+                </div>
+                <div class="form-group">
+                    <label>Address</label>
+                    <textarea id="reg-address"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Register</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Pet Detail Modal -->
+    <div id="pet-modal" class="modal">
+        <div class="modal-content modal-large">
+            <span class="close" onclick="closeModal('pet-modal')">&times;</span>
+            <div id="pet-detail"></div>
+        </div>
+    </div>
+
+    <!-- Wallet Modal -->
+    <div id="wallet-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('wallet-modal')">&times;</span>
+            <h2>Add Funds to Wallet</h2>
+            <form id="wallet-form">
+                <div class="form-group">
+                    <label>Amount</label>
+                    <input type="number" id="wallet-amount" min="1" step="0.01" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Add Funds</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
