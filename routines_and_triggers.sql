@@ -40,6 +40,14 @@ BEGIN
   IF v_status <> 'Available' THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Pet is not available for adoption';
   END IF;
+
+  -- Prevent donor from adopting their own donated pet
+  IF EXISTS (
+      SELECT 1 FROM DonorApplication da
+      WHERE da.pet_id = p_pet_id AND da.user_id = p_user_id AND da.status = 'approved'
+  ) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'You cannot adopt a pet you donated';
+  END IF;
   
   -- Prevent duplicate pending applications from same user for same pet
   SELECT COUNT(*) INTO v_existing_pending
@@ -69,7 +77,7 @@ BEGIN
   DECLARE EXIT HANDLER FOR SQLEXCEPTION
   BEGIN
     ROLLBACK;
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'approve_adoption: transaction failed';
+    RESIGNAL; -- preserve original error message for client
   END;
 
   START TRANSACTION;
@@ -92,6 +100,14 @@ BEGIN
   END IF;
   IF v_pet_status <> 'Available' THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Pet is not available for adoption';
+  END IF;
+
+  -- Prevent donor from adopting their own donated pet
+  IF EXISTS (
+      SELECT 1 FROM DonorApplication da
+      WHERE da.pet_id = v_pet AND da.user_id = v_user AND da.status = 'approved'
+  ) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Donors cannot adopt their own donated pet';
   END IF;
 
   -- Require at least one vet record before approval

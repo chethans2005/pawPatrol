@@ -13,14 +13,21 @@
                 <h1>🐾 Pet Adoption Center</h1>
             </div>
             <div class="nav-menu">
-                <a href="#pets" class="nav-link">Browse Pets</a>
-                <a href="#shop" class="nav-link">Shop</a>
-                <a href="#donate" class="nav-link">Donate Pet</a>
+                <a href="#pets" class="nav-link" id="user-nav-link">Browse Pets</a>
+                <a href="#shop" class="nav-link" id="user-nav-link">Shop</a>
+                <a href="#donate" class="nav-link" id="user-nav-link">Donate Pet</a>
+                <!-- User Menu (for regular users) -->
                 <div id="user-menu" style="display: none;">
                     <span id="username-display"></span>
-                    <span id="wallet-display"></span>
+                    <span id="wallet-display" style="cursor: pointer; margin-right: 15px; font-weight: bold;">$0.00</span>
                     <button id="logout-btn" class="btn btn-secondary">Logout</button>
                 </div>
+                <!-- Admin Menu -->
+                <div id="admin-menu" style="display: none;">
+                    <button id="admin-btn" class="btn btn-warning" style="background-color: #ff6b6b; color: white; margin-right: 10px;" onclick="showSection('admin')">Admin</button>
+                    <button id="admin-logout-btn" class="btn btn-secondary">Logout</button>
+                </div>
+                <!-- Auth Menu (for non-logged-in users) -->
                 <div id="auth-menu">
                     <button id="login-btn" class="btn btn-primary">Login</button>
                     <button id="register-btn" class="btn btn-primary">Register</button>
@@ -40,19 +47,27 @@
         <!-- Pets Section -->
         <section id="pets" class="section">
             <h2>Available Pets</h2>
-            <div class="filters">
-                <select id="shelter-filter" class="filter-select">
-                    <option value="">All Shelters</option>
-                </select>
-                <button class="btn" onclick="loadPets()">Filter</button>
-            </div>
             <div id="pets-grid" class="grid"></div>
         </section>
 
         <!-- Shop Section -->
         <section id="shop" class="section" style="display: none;">
             <h2>Pet Supplies Shop</h2>
-            <div id="shop-grid" class="grid"></div>
+            <div style="display:flex; gap: 20px; align-items: flex-start;">
+                <div style="flex: 2;">
+                    <div id="shop-grid" class="grid"></div>
+                </div>
+                <div style="flex: 1; min-width: 280px;">
+                    <div class="card">
+                        <h3>Your Cart</h3>
+                        <div id="cart-list"></div>
+                        <div style="margin-top: 10px;">
+                            <strong>Total: </strong><span id="cart-total">$0.00</span>
+                        </div>
+                        <button class="btn btn-success" style="margin-top:10px;" onclick="checkoutCart()">Checkout</button>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- Donate Section -->
@@ -99,6 +114,22 @@
         <section id="my-orders" class="section" style="display: none;">
             <h2>My Orders</h2>
             <div id="orders-list"></div>
+        </section>
+
+        <!-- Admin Section -->
+        <section id="admin" class="section" style="display: none;">
+            <h2>Admin Panel</h2>
+            <div class="admin-tabs">
+                <button class="btn" onclick="showAdminTab('dashboard')">Dashboard</button>
+                <button class="btn" onclick="showAdminTab('shelters')">Manage Shelters</button>
+                <button class="btn" onclick="showAdminTab('revenue')">Finance</button>
+                <button class="btn" onclick="showAdminTab('adoptions')">Adoption History</button>
+                <button class="btn" onclick="showAdminTab('pets')">Manage Pets</button>
+                <button class="btn" onclick="showAdminTab('shopitems')">Manage Shop Items</button>
+                <button class="btn" onclick="showAdminTab('caretakers')">Manage Caretakers</button>
+                <button class="btn" onclick="showAdminTab('users')">Manage Users (Admin)</button>
+            </div>
+            <div id="admin-content"></div>
         </section>
     </main>
 
