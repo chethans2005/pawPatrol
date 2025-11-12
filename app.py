@@ -195,6 +195,7 @@ def dev_session_check():
 def get_pets():
     """Get all available pets (optionally filter by shelter)"""
     shelter_id = request.args.get('shelter_id', None)
+    q = request.args.get('q', None)
     
     conn = get_db_connection()
     if not conn:
@@ -202,12 +203,39 @@ def get_pets():
     
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.callproc('list_available_pets', [shelter_id])
-        
-        for result in cursor.stored_results():
-            pets = result.fetchall()
-        
-        return jsonify(pets), 200
+        if q:
+            # Text search on name/species/breed, only Available pets
+            like = f"%{q}%"
+            if shelter_id:
+                cursor.execute(
+                    """
+                    SELECT pet_id, name, species, breed, age, health_status, price, shelter_id, status
+                    FROM Pet
+                    WHERE status = 'Available'
+                      AND shelter_id = %s
+                      AND (name LIKE %s OR species LIKE %s OR breed LIKE %s)
+                    ORDER BY pet_id
+                    """,
+                    (shelter_id, like, like, like)
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT pet_id, name, species, breed, age, health_status, price, shelter_id, status
+                    FROM Pet
+                    WHERE status = 'Available' AND (name LIKE %s OR species LIKE %s OR breed LIKE %s)
+                    ORDER BY pet_id
+                    """,
+                    (like, like, like)
+                )
+            pets = cursor.fetchall()
+            return jsonify(pets), 200
+        else:
+            # Default behavior via stored procedure
+            cursor.callproc('list_available_pets', [shelter_id])
+            for result in cursor.stored_results():
+                pets = result.fetchall()
+            return jsonify(pets), 200
     except Error as e:
         return jsonify({'error': str(e)}), 500
     finally:
@@ -492,6 +520,7 @@ def reject_donor_application(donor_app_id):
 def get_shop_items():
     """Get all shop items"""
     shelter_id = request.args.get('shelter_id', None)
+    q = request.args.get('q', None)
     
     conn = get_db_connection()
     if not conn:
@@ -499,20 +528,21 @@ def get_shop_items():
     
     try:
         cursor = conn.cursor(dictionary=True)
+        base_sql = (
+            "SELECT si.*, s.name as shelter_name "
+            "FROM ShopItem si JOIN Shelter s ON si.shelter_id = s.shelter_id "
+            "WHERE si.stock_quantity > 0"
+        )
+        params = []
         if shelter_id:
-            cursor.execute("""
-                SELECT si.*, s.name as shelter_name
-                FROM ShopItem si
-                JOIN Shelter s ON si.shelter_id = s.shelter_id
-                WHERE si.shelter_id = %s AND si.stock_quantity > 0
-            """, (shelter_id,))
-        else:
-            cursor.execute("""
-                SELECT si.*, s.name as shelter_name
-                FROM ShopItem si
-                JOIN Shelter s ON si.shelter_id = s.shelter_id
-                WHERE si.stock_quantity > 0
-            """)
+            base_sql += " AND si.shelter_id = %s"
+            params.append(shelter_id)
+        if q:
+            base_sql += " AND (si.name LIKE %s OR si.description LIKE %s)"
+            like = f"%{q}%"
+            params.extend([like, like])
+        base_sql += " ORDER BY si.item_id DESC"
+        cursor.execute(base_sql, tuple(params))
         items = cursor.fetchall()
         
         return jsonify(items), 200
@@ -953,6 +983,18 @@ def create_pet():
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
     try:
+        cursor = conn.cursor(dictionary=True)
+        # Validation: if caretaker provided, ensure shelter_id present and matches caretaker's shelter
+        if caretaker_id is not None:
+            if not shelter_id:
+                return jsonify({'error': 'shelter_id is required when assigning a caretaker'}), 400
+            cursor.execute("SELECT shelter_id FROM Caretaker WHERE caretaker_id = %s", (caretaker_id,))
+            ct = cursor.fetchone()
+            if not ct:
+                return jsonify({'error': 'Caretaker not found'}), 400
+            if int(ct['shelter_id']) != int(shelter_id):
+                return jsonify({'error': 'Caretaker must belong to the same shelter as the pet'}), 400
+
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO Pet (name, species, breed, age, price, shelter_id, health_status, caretaker_id, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
@@ -971,20 +1013,50 @@ def create_pet():
 @admin_required
 def update_pet(pet_id):
     data = request.json
-    fields = []
-    values = []
-    for key in ('name','species','breed','age','price','shelter_id','caretaker_id','health_status','status'):
-        if key in data:
-            fields.append(f"{key} = %s")
-            values.append(data.get(key))
-    if not fields:
-        return jsonify({'error':'no fields to update'}), 400
-    values.append(pet_id)
-    sql = f"UPDATE Pet SET {', '.join(fields)} WHERE pet_id = %s"
     conn = get_db_connection()
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
     try:
+        # Fetch current pet to compute effective shelter/caretaker after update
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT shelter_id, caretaker_id FROM Pet WHERE pet_id = %s", (pet_id,))
+        pet = cur.fetchone()
+        if not pet:
+            return jsonify({'error': 'Pet not found'}), 404
+
+        new_shelter_id = data.get('shelter_id', pet['shelter_id'])
+        new_caretaker_id = data.get('caretaker_id', pet['caretaker_id'])
+
+        # If caretaker is provided (non-null), ensure caretaker belongs to effective shelter
+        if new_caretaker_id is not None:
+            cur.execute("SELECT shelter_id FROM Caretaker WHERE caretaker_id = %s", (new_caretaker_id,))
+            ct = cur.fetchone()
+            if not ct:
+                return jsonify({'error': 'Caretaker not found'}), 400
+            # If new_shelter_id is not specified in payload, treat current pet shelter as effective
+            effective_shelter_id = pet['shelter_id'] if new_shelter_id is None else new_shelter_id
+            if effective_shelter_id is None or int(ct['shelter_id']) != int(effective_shelter_id):
+                return jsonify({'error': 'Caretaker must belong to the same shelter as the pet'}), 400
+
+        # If only shelter changes while a caretaker is set, ensure compatibility
+        if 'shelter_id' in data and new_caretaker_id is not None:
+            cur.execute("SELECT shelter_id FROM Caretaker WHERE caretaker_id = %s", (new_caretaker_id,))
+            ct2 = cur.fetchone()
+            if ct2 and int(ct2['shelter_id']) != int(new_shelter_id):
+                return jsonify({'error': 'Cannot change pet shelter: assigned caretaker belongs to a different shelter'}), 400
+
+        # Build dynamic update
+        fields = []
+        values = []
+        for key in ('name','species','breed','age','price','shelter_id','caretaker_id','health_status','status'):
+            if key in data:
+                fields.append(f"{key} = %s")
+                values.append(data.get(key))
+        if not fields:
+            return jsonify({'error':'no fields to update'}), 400
+        values.append(pet_id)
+        sql = f"UPDATE Pet SET {', '.join(fields)} WHERE pet_id = %s"
+
         cursor = conn.cursor()
         cursor.execute(sql, tuple(values))
         conn.commit()
@@ -992,7 +1064,14 @@ def update_pet(pet_id):
     except Error as e:
         return jsonify({'error': str(e)}), 400
     finally:
-        cursor.close()
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            cursor.close()
+        except Exception:
+            pass
         conn.close()
 
 
@@ -1022,7 +1101,14 @@ def get_caretakers():
         return jsonify({'error': 'Database connection failed'}), 500
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT caretaker_id, name, contact, shelter_id FROM Caretaker ORDER BY name")
+        shelter_id = request.args.get('shelter_id')
+        if shelter_id:
+            cursor.execute(
+                "SELECT caretaker_id, name, contact, shelter_id FROM Caretaker WHERE shelter_id = %s ORDER BY name",
+                (shelter_id,)
+            )
+        else:
+            cursor.execute("SELECT caretaker_id, name, contact, shelter_id FROM Caretaker ORDER BY name")
         caretakers = cursor.fetchall()
         return jsonify(caretakers), 200
     except Error as e:
@@ -1104,6 +1190,21 @@ def assign_caretaker(pet_id):
     if not conn:
         return jsonify({'error':'Database connection failed'}), 500
     try:
+        cur = conn.cursor(dictionary=True)
+        # Fetch pet shelter
+        cur.execute("SELECT shelter_id FROM Pet WHERE pet_id = %s", (pet_id,))
+        pet = cur.fetchone()
+        if not pet:
+            return jsonify({'error': 'Pet not found'}), 404
+        # Fetch caretaker shelter
+        cur.execute("SELECT shelter_id FROM Caretaker WHERE caretaker_id = %s", (caretaker_id,))
+        ct = cur.fetchone()
+        if not ct:
+            return jsonify({'error': 'Caretaker not found'}), 400
+        if int(ct['shelter_id']) != int(pet['shelter_id']):
+            return jsonify({'error': 'Caretaker must belong to the same shelter as the pet'}), 400
+
+        # Use a separate cursor for update (optional); guard its closure
         cursor = conn.cursor()
         cursor.execute("UPDATE Pet SET caretaker_id = %s WHERE pet_id = %s", (caretaker_id, pet_id))
         conn.commit()
@@ -1111,7 +1212,15 @@ def assign_caretaker(pet_id):
     except Error as e:
         return jsonify({'error': str(e)}), 400
     finally:
-        cursor.close(); conn.close()
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        conn.close()
 
 
 @app.route('/api/admin/pets/<int:pet_id>/assign-shelter', methods=['POST'])
@@ -1125,6 +1234,18 @@ def assign_shelter(pet_id):
     if not conn:
         return jsonify({'error':'Database connection failed'}), 500
     try:
+        cur = conn.cursor(dictionary=True)
+        # Check existing caretaker compatibility
+        cur.execute("SELECT caretaker_id FROM Pet WHERE pet_id = %s", (pet_id,))
+        pet = cur.fetchone()
+        if not pet:
+            return jsonify({'error':'Pet not found'}), 404
+        if pet['caretaker_id'] is not None:
+            cur.execute("SELECT shelter_id FROM Caretaker WHERE caretaker_id = %s", (pet['caretaker_id'],))
+            ct = cur.fetchone()
+            if ct and int(ct['shelter_id']) != int(shelter_id):
+                return jsonify({'error': 'Cannot change pet shelter: assigned caretaker belongs to a different shelter'}), 400
+
         cursor = conn.cursor()
         cursor.execute("UPDATE Pet SET shelter_id = %s WHERE pet_id = %s", (shelter_id, pet_id))
         conn.commit()
@@ -1132,6 +1253,10 @@ def assign_shelter(pet_id):
     except Error as e:
         return jsonify({'error': str(e)}), 400
     finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
         cursor.close(); conn.close()
 
 # ============= USER WALLET ROUTES =============

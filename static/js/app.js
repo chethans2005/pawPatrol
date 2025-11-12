@@ -331,9 +331,13 @@ async function loadShelters() {
 
 // Pets
 async function loadPets() {
-    const shelterFilter = document.getElementById('shelter-filter');
-    const shelterId = shelterFilter ? shelterFilter.value : '';
-    const url = shelterId ? `${API_BASE}/pets?shelter_id=${shelterId}` : `${API_BASE}/pets`;
+    const queryEl = document.getElementById('pet-search');
+    const q = queryEl ? queryEl.value.trim() : '';
+    let url = `${API_BASE}/pets`;
+    if (q) {
+        const params = new URLSearchParams({ q });
+        url = `${url}?${params.toString()}`;
+    }
     
     try {
         const response = await fetch(url, {credentials: 'include'});
@@ -439,7 +443,14 @@ async function applyForAdoption(petId) {
 // Shop
 async function loadShopItems() {
     try {
-        const response = await fetch(`${API_BASE}/shop/items`, {credentials: 'include'});
+        const queryEl = document.getElementById('shop-search');
+        const q = queryEl ? queryEl.value.trim() : '';
+        let url = `${API_BASE}/shop/items`;
+        if (q) {
+            const params = new URLSearchParams({ q });
+            url = `${url}?${params.toString()}`;
+        }
+        const response = await fetch(url, {credentials: 'include'});
         const items = await response.json();
         displayShopItems(items);
     } catch (error) {
@@ -1260,20 +1271,32 @@ async function loadShelterDropdown() {
         shelters.forEach(s => {
             select.innerHTML += `<option value="${s.shelter_id}">${s.name}</option>`;
         });
+        // Attach change listener to dynamically filter caretakers by selected shelter
+        select.addEventListener('change', () => {
+            const shelterId = select.value;
+            loadCaretakerDropdown(shelterId || null);
+        });
     } catch (error) {
         console.error('Failed to load shelters', error);
     }
 }
 
-async function loadCaretakerDropdown() {
+async function loadCaretakerDropdown(shelterId = null) {
     try {
-        const response = await fetch(`${API_BASE}/caretakers`, {credentials: 'include'});
+        // If a shelter is chosen, fetch only caretakers from that shelter
+        const url = shelterId ? `${API_BASE}/caretakers?shelter_id=${encodeURIComponent(shelterId)}` : `${API_BASE}/caretakers`;
+        const response = await fetch(url, {credentials: 'include'});
         const caretakers = await response.json();
         const select = document.getElementById('pet-caretaker-id');
         select.innerHTML = '<option value="">None (No Caretaker)</option>';
         caretakers.forEach(c => {
             select.innerHTML += `<option value="${c.caretaker_id}">${c.name}</option>`;
         });
+        // If currently selected caretaker not in filtered list, clear selection
+        const currentVal = select.value;
+        if (currentVal && !caretakers.some(c => String(c.caretaker_id) === currentVal)) {
+            select.value = '';
+        }
     } catch (error) {
         console.error('Failed to load caretakers', error);
     }

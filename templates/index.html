@@ -47,12 +47,20 @@
         <!-- Pets Section -->
         <section id="pets" class="section">
             <h2>Available Pets</h2>
+            <div class="filters" style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+                <input type="text" id="pet-search" class="filter-input" placeholder="Search by name, species, breed">
+                <button class="btn" onclick="loadPets()">Search</button>
+            </div>
             <div id="pets-grid" class="grid"></div>
         </section>
 
         <!-- Shop Section -->
         <section id="shop" class="section" style="display: none;">
             <h2>Pet Supplies Shop</h2>
+            <div class="filters" style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+                <input type="text" id="shop-search" class="filter-input" placeholder="Search items">
+                <button class="btn" onclick="loadShopItems()">Search</button>
+            </div>
             <div style="display:flex; gap: 20px; align-items: flex-start;">
                 <div style="flex: 2;">
                     <div id="shop-grid" class="grid"></div>
