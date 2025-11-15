@@ -54,8 +54,8 @@ Get-Content "pet_centre.sql" -Raw | mysql -u root -p pet_center
 # Import procedures and triggers
 Get-Content "routines_and_triggers.sql" -Raw | mysql -u root -p pet_center
 
-# Optional: Import sample data
-Get-Content "inserts.sql" -Raw | mysql -u root -p pet_center
+# Import Advanced procedure, fucntions and triggers
+Get-Content "advanced_queries.sql" -Raw | mysql -u root -p pet_center
 ```
 
 ### 2. Backend Setup

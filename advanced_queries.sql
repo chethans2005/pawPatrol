@@ -66,10 +66,6 @@ BEGIN
     END IF;
 END $$
 DELIMITER ;
-
--- Example call (remove or adjust as needed)
--- CALL UpdateAdoptionApplicationStatusAndPet(3, 'approved');
-
 -- ViewPendingApplications
 DELIMITER $$
 CREATE PROCEDURE ViewPendingApplications(IN app_type VARCHAR(20))
@@ -220,8 +216,3 @@ BEGIN
     IF error_message != '' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = error_message; END IF;
 END $$
 DELIMITER ;
-
--- Example calls (remove if not needed)
--- CALL UpdateAdoptionApplicationStatusAndPet(3, 'approved');
--- CALL ViewPendingApplications('donation');
--- CALL ApproveRejectDonorApplication(1, 'approved', 1, 1);
